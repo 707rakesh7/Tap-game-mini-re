@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tap Rush</title>
+    <!-- Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --neon-pink: #ff007f;
+            --neon-cyan: #00f5ff;
+            --neon-yellow: #fffb00;
+            --text-color: #ffffff;
+            --card-bg: rgba(26, 26, 46, 0.85);
+            --font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: var(--font-family);
+            color: var(--text-color);
+        }
+
+        /* Ambient glowing background grid */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                linear-gradient(rgba(26, 26, 46, 0.4) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(26, 26, 46, 0.4) 1px, transparent 1px);
+            background-size: 30px 30px;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Screen Wrapper */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            padding: 24px;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .hidden {
+            display: none !important;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Start / Splash Screen */
+        #start-screen {
+            background: radial-gradient(circle, #25254e 0%, #101026 100%);
+        }
+
+        .logo-container {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        h1.game-title {
+            font-size: 3.5rem;
+            margin: 0;
+            font-weight: 900;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, var(--neon-pink), var(--neon-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 245, 255, 0.4);
+        }
+
+        .game-subtitle {
+            font-size: 1rem;
+            color: var(--neon-yellow);
+            letter-spacing: 2px;
+            margin-top: 8px;
+            text-shadow: 0 0 10px rgba(255, 251, 0, 0.3);
+        }
+
+        /* User badge for Telegram WebApp SDK */
+        #user-badge {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--neon-pink), #b30059);
+            color: white;
+            border: none;
+            padding: 16px 40px;
+            font-size: 1.25rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            outline: none;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 5px rgba(255, 0, 127, 0.2);
+        }
+
+        /* HUD overlay */
+        #hud {
+            position: absolute;
+            top: env(safe-area-inset-top, 16px);
+            left: 0;
+            width: 100%;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .hud-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .hud-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .hud-val {
+            font-size: 1.5rem;
+            font-weight: 800;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+
+        #score-val {
+            color: var(--neon-cyan);
+            text-shadow: 0 0 10px rgba(0, 245, 255, 0.3);
+        }
+
+        #lives-val {
+            color: var(--neon-pink);
+            letter-spacing: 2px;
+        }
+
+        /* Timer Center Top Overlay */
+        #timer-container {
+            position: absolute;
+            top: calc(env(safe-area-inset-top, 16px) + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        #timer-val {
+            font-size: 3.5rem;
+            font-weight: 900;
+            transition: color 0.3s, transform 0.2s;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 15px rgba(0, 245, 255, 0.5);
+        }
+
+        #timer-val.warning {
+            color: #ff3333;
+            text-shadow: 0 0 20px #ff0000;
+            animation: pulse-warning 1s infinite alternate;
+        }
+
+        /* Canvas */
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            z-index: 2;
+        }
+
+        /* Game Over Screen */
+        #game-over-screen {
+            background: rgba(10, 10, 20, 0.95);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 32px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .card h2 {
+            font-size: 2.5rem;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            background: linear-gradient(45deg, #ff3333, #ff007f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(255, 0, 127, 0.3);
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 4px;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 3rem;
+            font-weight: 900;
+            color: var(--neon-yellow);
+            text-shadow: 0 0 15px rgba(255, 251, 0, 0.4);
+        }
+
+        .btn-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .btn-reward {
+            background: linear-gradient(135deg, var(--neon-yellow), #d4af37);
+            color: #111;
+            box-shadow: 0 0 15px rgba(255, 251, 0, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: none;
+        }
+
+        .btn-secondary:active {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Screen Flash for damage feedback */
+        #flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 0, 0, 0.3);
+            pointer-events: none;
+            z-index: 4;
+            opacity: 0;
+            transition: opacity 0.1s ease-out;
+        }
+
+        /* Animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes pulse-warning {
+            0% { transform: translateX(-50%) scale(1); }
+            100% { transform: translateX(-50%) scale(1.1); }
+        }
+
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="flash"></div>
+
+    <!-- HUD Overlay for Game screen -->
+    <div id="hud" class="hidden">
+        <div class="hud-item">
+            <span class="hud-label">Score</span>
+            <span id="score-val" class="hud-val">0</span>
+        </div>
+        <div class="hud-item" style="align-items: flex-end;">
+            <span class="hud-label">Lives</span>
+            <span id="lives-val" class="hud-val">❤️❤️❤️</span>
+        </div>
+    </div>
+
+    <!-- Large countdown overlay -->
+    <div id="timer-container" class="hidden">
+        <div id="timer-val">30</div>
+    </div>
+
+    <!-- Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Start Splash Screen -->
+    <div id="start-screen" class="screen">
+        <div class="logo-container">
+            <h1 class="game-title">Tap Rush</h1>
+            <div class="game-subtitle">TAP FAST OR LOSE LIFE</div>
+        </div>
+
+        <div id="user-badge" class="hidden">
+            <span>👋</span>
+            <span id="username">Guest</span>
+        </div>
+
+        <button class="btn" id="start-btn">PLAY GAME</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="screen hidden">
+        <div class="card">
+            <h2 id="end-title">Game Over</h2>
+            <div class="stat-box">
+                <div class="stat-label">Final Score</div>
+                <div id="final-score" class="stat-value">0</div>
+            </div>
+            <div class="btn-stack">
+                <button class="btn btn-reward" id="reward-btn">CLAIM REWARD 🎁</button>
+                <button class="btn btn-secondary" id="restart-btn">PLAY AGAIN</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Telegram Web App SDK initialization
+        let tg = null;
+        if (window.Telegram && window.Telegram.WebApp) {
+            tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+            
+            // Set Telegram app theme colors if possible
+            if (tg.setHeaderColor) {
+                tg.setHeaderColor('#1a1a2e');
+            }
+            if (tg.setBackgroundColor) {
+                tg.setBackgroundColor('#1a1a2e');
+            }
+
+            // Display username if available
+            const userBadge = document.getElementById('user-badge');
+            const usernameSpan = document.getElementById('username');
+            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                const user = tg.initDataUnsafe.user;
+                usernameSpan.textContent = user.username || user.first_name || "Player";
+                userBadge.classList.remove('hidden');
+            }
+        }
+
+        // Haptic Feedback Helper
+        function triggerHaptic(type = 'impact') {
+            if (tg && tg.HapticFeedback) {
+                if (type === 'impact') {
+                    tg.HapticFeedback.impactOccurred('medium');
+                } else if (type === 'notification-success') {
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else if (type === 'notification-error') {
+                    tg.HapticFeedback.notificationOccurred('error');
+                }
+            } else if (navigator.vibrate) {
+                navigator.vibrate(type === 'notification-error' ? [100, 50, 100] : 40);
+            }
+        }
+
+        // Setup Canvas
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game State Variables
+        let score = 0;
+        let lives = 3;
+        let timeLeft = 30; // Seconds
+        let isPlaying = false;
+        let circles = [];
+        let particles = [];
+        let circleIdCounter = 0;
+        
+        // Loop Timer References
+        let spawnIntervalId = null;
+        let countdownIntervalId = null;
+        let lastFrameTime = 0;
+
+        // UI references
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const hud = document.getElementById('hud');
+        const timerContainer = document.getElementById('timer-container');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const rewardBtn = document.getElementById('reward-btn');
+        const scoreVal = document.getElementById('score-val');
+        const livesVal = document.getElementById('lives-val');
+        const timerVal = document.getElementById('timer-val');
+        const finalScore = document.getElementById('final-score');
+        const endTitle = document.getElementById('end-title');
+        const flashOverlay = document.getElementById('flash');
+
+        // Color Palette for Neon Circles
+        const neonColors = [
+            '#ff007f', // Pink
+            '#00f5ff', // Cyan
+            '#fffb00'  // Yellow
+        ];
+
+        // Handle Resize to support high-DPI screens and fit to screen cleanly
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            ctx.scale(dpr, dpr);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Target Circle class
+        class TargetCircle {
+            constructor() {
+                this.id = circleIdCounter++;
+                this.padding = 60; // Keep circles away from raw edges
+                this.x = this.padding + Math.random() * (window.innerWidth - this.padding * 2);
+                this.y = this.padding + Math.random() * (window.innerHeight - this.padding * 3); // Extra top padding for HUD
+                
+                // Keep y below HUD height (approx 120px) and above safe area
+                const minHUDHeight = 120;
+                if (this.y < minHUDHeight) {
+                    this.y = minHUDHeight + Math.random() * (window.innerHeight - minHUDHeight - this.padding);
+                }
+
+                this.baseRadius = 35 + Math.random() * 15; // Random size
+                this.radius = 0; // Starts from 0 for popping in
+                this.targetRadius = this.baseRadius;
+                this.color = neonColors[Math.floor(Math.random() * neonColors.length)];
+                this.spawnTime = Date.now();
+                this.duration = 1500; // 1.5 seconds lifespan
+                this.state = 'popin'; // popin, idle, fadeout
+                this.opacity = 1;
+            }
+
+            update() {
+                const elapsed = Date.now() - this.spawnTime;
+                
+                if (elapsed >= this.duration) {
+                    return false; // Time's up
+                }
+
+                // Animation States
+                if (elapsed < 200) {
+                    // Quick pop-in effect
+                    this.radius = (elapsed / 200) * this.targetRadius;
+                } else if (elapsed > this.duration - 300) {
+                    // Quick fade out
+                    this.state = 'fadeout';
+                    const fadeProgress = (this.duration - elapsed) / 300;
+                    this.radius = fadeProgress * this.targetRadius;
+                    this.opacity = Math.max(0, fadeProgress);
+                } else {
+                    this.state = 'idle';
+                    this.radius = this.targetRadius;
+                    this.opacity = 1;
+                }
+                return true;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                
+                // Outer glow shadow
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+
+                // Draw outer ring
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                // Draw middle dotted-style ring or circle indicator
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.6, 0, Math.PI * 2);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Draw center solid dot
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 8, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+
+                // Draw shrink boundary progress ring around target
+                const elapsed = Date.now() - this.spawnTime;
+                const progressRatio = elapsed / this.duration;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2 * (1 - progressRatio));
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            contains(tx, ty) {
+                const dist = Math.hypot(tx - this.x, ty - this.y);
+                // Make tap target slightly larger than raw circle radius for ultra-smooth tapping comfort!
+                return dist <= (this.targetRadius + 15);
+            }
+        }
+
+        // Sparkle Particle class
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 5;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                
+                this.radius = 2 + Math.random() * 3;
+                this.life = 1.0; // Decay from 1 to 0
+                this.decay = 0.03 + Math.random() * 0.03;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= 0.98; // Drag
+                this.vy *= 0.98;
+                this.life -= this.decay;
+                return this.life > 0;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                
+                // Add center spark core
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        // Damage Screen Flash
+        function triggerScreenFlash() {
+            flashOverlay.style.opacity = '1';
+            setTimeout(() => {
+                flashOverlay.style.opacity = '0';
+            }, 100);
+        }
+
+        // Spawn Circle at Interval
+        function spawnCircle() {
+            if (!isPlaying) return;
+            circles.push(new TargetCircle());
+        }
+
+        // Update Game Loop
+        function gameLoop() {
+            if (!isPlaying) return;
+
+            // Clear Canvas
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+            // Update & Draw Circles
+            for (let i = circles.length - 1; i >= 0; i--) {
+                const active = circles[i].update();
+                if (active) {
+                    circles[i].draw();
+                } else {
+                    // Disappeared on its own (1.5 seconds elapsed) -> decrease life!
+                    circles.splice(i, 1);
+                    decreaseLife();
+                }
+            }
+
+            // Update & Draw Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const active = particles[i].update();
+                if (active) {
+                    particles[i].draw();
+                } else {
+                    particles.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Decrease Life logic
+        function decreaseLife() {
+            lives--;
+            triggerHaptic('notification-error');
+            triggerScreenFlash();
+            updateLivesUI();
+
+            if (lives <= 0) {
+                endGame(false); // Lost all lives
+            }
+        }
+
+        // Update Lives UI string with hearts
+        function updateLivesUI() {
+            let hearts = '';
+            for (let i = 0; i < 3; i++) {
+                if (i < lives) hearts += '❤️';
+                else hearts += '🖤';
+            }
+            livesVal.textContent = hearts;
+        }
+
+        // Tap/Click Action
+        function handleTap(tx, ty) {
+            if (!isPlaying) return;
+
+            let hit = false;
+            // Iterate backwards to hit top-most circles first
+            for (let i = circles.length - 1; i >= 0; i--) {
+                if (circles[i].contains(tx, ty)) {
+                    const tappedCircle = circles[i];
+                    
+                    // Award points
+                    score++;
+                    scoreVal.textContent = score;
+                    
+                    // Spark effects ✨
+                    const particleCount = 12 + Math.floor(Math.random() * 6);
+                    for (let p = 0; p < particleCount; p++) {
+                        particles.push(new Particle(tappedCircle.x, tappedCircle.y, tappedCircle.color));
+                    }
+                    
+                    // Play neon haptic feedback
+                    triggerHaptic('impact');
+                    
+                    // Remove from list
+                    circles.splice(i, 1);
+                    hit = true;
+                    break;
+                }
+            }
+        }
+
+        // Tap Listeners (Mouse + Touch)
+        canvas.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            handleTap(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            handleTap(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        // Start Game Engine
+        function startGame() {
+            score = 0;
+            lives = 3;
+            timeLeft = 30;
+            circles = [];
+            particles = [];
+            isPlaying = true;
+
+            // Setup UI
+            scoreVal.textContent = score;
+            updateLivesUI();
+            timerVal.textContent = timeLeft;
+            timerVal.classList.remove('warning');
+
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            hud.classList.remove('hidden');
+            timerContainer.classList.remove('hidden');
+
+            triggerHaptic('notification-success');
+
+            // Clear old timers
+            if (spawnIntervalId) clearInterval(spawnIntervalId);
+            if (countdownIntervalId) clearInterval(countdownIntervalId);
+
+            // Set game loops
+            spawnIntervalId = setInterval(spawnCircle, 800); // 0.8 seconds spawn interval
+            
+            countdownIntervalId = setInterval(() => {
+                if (!isPlaying) return;
+                timeLeft--;
+                timerVal.textContent = timeLeft;
+
+                // Color red when 10 seconds remaining
+                if (timeLeft <= 10) {
+                    timerVal.classList.add('warning');
+                    triggerHaptic('impact');
+                }
+
+                if (timeLeft <= 0) {
+                    endGame(true); // Beat the timer!
+                }
+            }, 1000);
+
+            // Spawn first circle instantly
+            spawnCircle();
+
+            // Run rendering frame loops
+            requestAnimationFrame(gameLoop);
+        }
+
+        // End Game logic
+        function endGame(timeFinished) {
+            isPlaying = false;
+            
+            // Clear timers
+            if (spawnIntervalId) clearInterval(spawnIntervalId);
+            if (countdownIntervalId) clearInterval(countdownIntervalId);
+
+            // Set final scores
+            finalScore.textContent = score;
+            endTitle.textContent = timeFinished ? "Time's Up!" : "Game Over";
+
+            // Screen Navigation
+            hud.classList.add('hidden');
+            timerContainer.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+
+            triggerHaptic('notification-success');
+        }
+
+        // Button Event Listeners
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+        rewardBtn.addEventListener('click', () => {
+            triggerHaptic('notification-success');
+            // Monetag reward link click
+            window.open('MONETAG_LINK', '_blank');
+        });
+    </script>
+</body>
+</html>
